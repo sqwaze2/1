@@ -39,6 +39,13 @@ while True:
     UNIVERSE_IDS.append(uid)
     i += 1
 
+TAG_CLOSED   = int(os.getenv("TAG_CLOSED",   "0"))
+TAG_BANNED   = int(os.getenv("TAG_BANNED",   "0"))
+TAG_REVIEWED = int(os.getenv("TAG_REVIEWED", "0"))
+
+CLOSEREP_MSG_BANNED     = "{mention} Banned! Thanks for reporting."
+CLOSEREP_MSG_NOT_BANNED = "{mention} Your report does not meet the Exploiter Report Rules. We cannot ban the exploiter ❗️"
+
 intents = discord.Intents.default()
 intents.members = True
 
@@ -132,18 +139,6 @@ async def get_roblox_following_count(session, user_id):
     return 0
 
 
-async def get_user_id_by_name(session, username):
-    url = "https://users.roblox.com/v1/usernames/users"
-    payload = {"usernames": [username], "excludeBannedUsers": False}
-    async with session.post(url, json=payload) as resp:
-        if resp.status != 200:
-            return None
-
-        data = await resp.json()
-        users = data.get("data", [])
-        return users[0]["id"] if users else None
-
-
 async def get_universe_info(session, universe_id):
     url = "https://develop.roblox.com/v1/universes/{}".format(universe_id)
     async with session.get(url) as resp:
@@ -204,7 +199,7 @@ async def ban_in_universe(session, user_id, reason, duration_seconds, universe_i
     restriction = {
         "active": True,
         "privateReason": reason or "Reason not provided",
-        "displayReason": "You have been banned from Murder Mystery 2. gg/kmm - Appeal",
+        "displayReason": reason or "You have been banned from Murder Mystery 2. gg/kmm - Appeal",
         "excludeAltAccounts": False,
         "duration": "{}s".format(duration_seconds) if duration_seconds is not None else None,
     }
@@ -299,6 +294,8 @@ async def on_ready():
     bot.tree.clear_commands(guild=None)
     await bot.tree.sync(guild=None)
 
+    # ── /unban ────────────────────────────────────────────────────────────────
+
     @bot.tree.command(
         name="unban",
         description="Unban a Roblox player from your game",
@@ -363,27 +360,23 @@ async def on_ready():
 
         await interaction.followup.send(embed=embed)
 
+    # ── /ban ──────────────────────────────────────────────────────────────────
+
     @bot.tree.command(
         name="ban",
         description="Permanently ban a Roblox exploiter from your game",
         guild=guild,
     )
     @app_commands.describe(
-        method="How to find the player: user-id or user-name",
-        value="Player Roblox ID or username",
-        evidence="Optional link to forum post or evidence"
-    )
-    @app_commands.choices(
-        method=[
-            app_commands.Choice(name="user-id", value="user-id"),
-            app_commands.Choice(name="user-name", value="user-name"),
-        ]
+        user_id="Player Roblox ID",
+        reason="Optional custom ban reason (shown to the player)",
+        evidence="Optional link to forum post or evidence",
     )
     async def ban_command(
         interaction: discord.Interaction,
-        method: app_commands.Choice[str],
-        value: str,
-        evidence: str = None
+        user_id: str,
+        reason: str = None,
+        evidence: str = None,
     ):
         await interaction.response.defer()
 
@@ -391,35 +384,33 @@ async def on_ready():
             await interaction.followup.send("You do not have permission to use this command.", ephemeral=True)
             return
 
-        async with aiohttp.ClientSession() as session:
-            if method.value == "user-id":
-                if not value.isdigit():
-                    await interaction.followup.send("Invalid format: user-id must be a number.", ephemeral=True)
-                    return
-                user_id = int(value)
-            else:
-                user_id = await get_user_id_by_name(session, value)
-                if not user_id:
-                    await interaction.followup.send("User **{}** was not found on Roblox.".format(value), ephemeral=True)
-                    return
+        if not user_id.isdigit():
+            await interaction.followup.send("Invalid format: user_id must be a number.", ephemeral=True)
+            return
 
-            username, display_name, avatar_url, friends, followers, following = await fetch_user_data(session, user_id)
+        uid_int = int(user_id)
+
+        async with aiohttp.ClientSession() as session:
+            username, display_name, avatar_url, friends, followers, following = await fetch_user_data(session, uid_int)
 
             results = []
             for uid in UNIVERSE_IDS:
-                ok, err = await ban_in_universe(session, user_id, "Exploits.", None, uid)
+                ok, err = await ban_in_universe(session, uid_int, reason, None, uid)
                 results.append((uid, ok, err))
 
         failed = [(uid, err) for uid, ok, err in results if not ok]
 
         embed = build_user_embed(
-            user_id, display_name, username, avatar_url,
+            uid_int, display_name, username, avatar_url,
             friends, followers, following,
             0x99AAB5 if not failed else 0xE74C3C
         )
         embed.add_field(name="⏱ Duration", value="Permanent", inline=True)
         embed.add_field(name="🛡 Moderator", value=interaction.user.mention, inline=True)
         embed.add_field(name="🎮 Places", value="{}/{} banned".format(len(results) - len(failed), len(results)), inline=True)
+
+        if reason:
+            embed.add_field(name="📋 Reason", value=reason, inline=False)
 
         if evidence:
             embed.add_field(name="🔗 Proof", value=evidence, inline=False)
@@ -432,6 +423,85 @@ async def on_ready():
             )
 
         await interaction.followup.send(embed=embed)
+
+    # ── /closerep ─────────────────────────────────────────────────────────────
+
+    @bot.tree.command(
+        name="closerep",
+        description="Close a report forum post and tag it accordingly",
+        guild=guild,
+    )
+    @app_commands.describe(
+        outcome="Whether the reported player was banned or not"
+    )
+    @app_commands.choices(
+        outcome=[
+            app_commands.Choice(name="banned",     value="banned"),
+            app_commands.Choice(name="not banned", value="not_banned"),
+        ]
+    )
+    async def closerep_command(
+        interaction: discord.Interaction,
+        outcome: app_commands.Choice[str] = None,
+    ):
+        await interaction.response.defer(ephemeral=True)
+
+        if not has_allowed_role(interaction.user):
+            await interaction.followup.send("You do not have permission to use this command.", ephemeral=True)
+            return
+
+        channel = interaction.channel
+
+        if not isinstance(channel, discord.Thread):
+            await interaction.followup.send("This command must be used inside a forum post (thread).", ephemeral=True)
+            return
+
+        is_banned = outcome is None or outcome.value == "banned"
+
+        # Build tag list: always add Closed, add Banned or Reviewed based on outcome
+        existing_tag_ids = [t.id for t in channel.applied_tags]
+        new_tag_ids = list(existing_tag_ids)
+
+        if TAG_CLOSED and TAG_CLOSED not in new_tag_ids:
+            new_tag_ids.append(TAG_CLOSED)
+
+        if is_banned:
+            if TAG_BANNED and TAG_BANNED not in new_tag_ids:
+                new_tag_ids.append(TAG_BANNED)
+            if TAG_REVIEWED in new_tag_ids:
+                new_tag_ids.remove(TAG_REVIEWED)
+        else:
+            if TAG_REVIEWED and TAG_REVIEWED not in new_tag_ids:
+                new_tag_ids.append(TAG_REVIEWED)
+            if TAG_BANNED in new_tag_ids:
+                new_tag_ids.remove(TAG_BANNED)
+
+        # Fetch the parent forum's available tags to build ForumTag objects
+        parent = channel.parent
+        available_tags = {t.id: t for t in getattr(parent, "available_tags", [])}
+        tags_to_apply = [available_tags[tid] for tid in new_tag_ids if tid in available_tags]
+
+        try:
+            await channel.edit(applied_tags=tags_to_apply)
+        except discord.Forbidden:
+            await interaction.followup.send("I don't have permission to edit this thread.", ephemeral=True)
+            return
+        except discord.HTTPException as e:
+            await interaction.followup.send("Failed to update the thread: {}".format(e), ephemeral=True)
+            return
+
+        # Ping the thread owner
+        owner_mention = "<@{}>".format(channel.owner_id) if channel.owner_id else ""
+
+        if is_banned:
+            msg = CLOSEREP_MSG_BANNED.format(mention=owner_mention)
+        else:
+            msg = CLOSEREP_MSG_NOT_BANNED.format(mention=owner_mention)
+
+        await channel.send(msg)
+        await interaction.followup.send("Report closed.", ephemeral=True)
+
+    # ── /syncbans ─────────────────────────────────────────────────────────────
 
     @bot.tree.command(
         name="syncbans",
