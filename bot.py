@@ -139,6 +139,17 @@ async def get_roblox_following_count(session, user_id):
     return 0
 
 
+async def get_user_id_by_name(session, username):
+    url = "https://users.roblox.com/v1/usernames/users"
+    payload = {"usernames": [username], "excludeBannedUsers": False}
+    async with session.post(url, json=payload) as resp:
+        if resp.status != 200:
+            return None
+        data = await resp.json()
+        users = data.get("data", [])
+        return users[0]["id"] if users else None
+
+
 async def get_universe_info(session, universe_id):
     url = "https://develop.roblox.com/v1/universes/{}".format(universe_id)
     async with session.get(url) as resp:
