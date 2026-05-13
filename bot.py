@@ -368,13 +368,13 @@ async def on_ready():
         guild=guild,
     )
     @app_commands.describe(
-        user_id="Player Roblox ID",
+        username="Player Roblox username",
         reason="Optional custom ban reason (shown to the player)",
         evidence="Optional link to forum post or evidence",
     )
     async def ban_command(
         interaction: discord.Interaction,
-        user_id: str,
+        username: str,
         reason: str = None,
         evidence: str = None,
     ):
@@ -384,13 +384,12 @@ async def on_ready():
             await interaction.followup.send("You do not have permission to use this command.", ephemeral=True)
             return
 
-        if not user_id.isdigit():
-            await interaction.followup.send("Invalid format: user_id must be a number.", ephemeral=True)
-            return
-
-        uid_int = int(user_id)
-
         async with aiohttp.ClientSession() as session:
+            uid_int = await get_user_id_by_name(session, username)
+            if not uid_int:
+                await interaction.followup.send("User **{}** was not found on Roblox.".format(username), ephemeral=True)
+                return
+
             username, display_name, avatar_url, friends, followers, following = await fetch_user_data(session, uid_int)
 
             results = []
