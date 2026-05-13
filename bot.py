@@ -494,11 +494,21 @@ async def on_ready():
         owner_mention = "<@{}>".format(channel.owner_id) if channel.owner_id else ""
 
         if is_banned:
-            msg = CLOSEREP_MSG_BANNED.format(mention=owner_mention)
+            embed_color = 0x99AAB5
+            embed_title = "Banned! Thanks for reporting."
         else:
-            msg = CLOSEREP_MSG_NOT_BANNED.format(mention=owner_mention)
+            embed_color = 0x57F287
+            embed_title = "Your report does not meet the Exploiter Report Rules. We cannot ban the exploiter ❗️"
 
-        await channel.send(msg)
+        embed = discord.Embed(
+            title=embed_title,
+            color=embed_color,
+            timestamp=datetime.now(timezone.utc),
+        )
+        embed.add_field(name="🛡 Closed by", value=interaction.user.mention, inline=True)
+        embed.set_footer(text="Report closed")
+
+        await channel.send(content=owner_mention, embed=embed)
         await interaction.followup.send("Report closed.", ephemeral=True)
 
     # ── /syncbans ─────────────────────────────────────────────────────────────
