@@ -313,41 +313,39 @@ async def on_ready():
         guild=guild,
     )
     @app_commands.describe(
-        method="How to find the player: user-id or user-name",
-        value="Player Roblox ID or username"
-    )
-    @app_commands.choices(
-        method=[
-            app_commands.Choice(name="user-id", value="user-id"),
-            app_commands.Choice(name="user-name", value="user-name"),
-        ]
+        username="Player Roblox username"
     )
     async def unban_command(
         interaction: discord.Interaction,
-        method: app_commands.Choice[str],
-        value: str
+        username: str
     ):
         await interaction.response.defer()
 
         if not has_allowed_role(interaction.user):
-            await interaction.followup.send("You do not have permission to use this command.", ephemeral=True)
+            await interaction.followup.send(
+                "You do not have permission to use this command.",
+                ephemeral=True
+            )
             return
 
         async with aiohttp.ClientSession() as session:
-            if method.value == "user-id":
-                if not value.isdigit():
-                    await interaction.followup.send("Invalid format: user-id must be a number.", ephemeral=True)
-                    return
-                user_id = int(value)
-            else:
-                user_id = await get_user_id_by_name(session, value)
-                if not user_id:
-                    await interaction.followup.send("User **{}** was not found on Roblox.".format(value), ephemeral=True)
-                    return
 
-            username, display_name, avatar_url, friends, followers, following = await fetch_user_data(session, user_id)
+            user_id = await get_user_id_by_name(session, username)
+
+            if not user_id:
+                await interaction.followup.send(
+                    "User **{}** was not found on Roblox.".format(username),
+                    ephemeral=True
+                )
+                return
+
+            username, display_name, avatar_url, friends, followers, following = await fetch_user_data(
+                session,
+                user_id
+            )
 
             results = []
+
             for uid in UNIVERSE_IDS:
                 ok, err = await unban_in_universe(session, user_id, uid)
                 results.append((uid, ok, err))
@@ -355,17 +353,40 @@ async def on_ready():
         failed = [(uid, err) for uid, ok, err in results if not ok]
 
         embed = build_user_embed(
-            user_id, display_name, username, avatar_url,
-            friends, followers, following,
+            user_id,
+            display_name,
+            username,
+            avatar_url,
+            friends,
+            followers,
+            following,
             0x57F287 if not failed else 0xE74C3C
         )
-        embed.add_field(name="🛡 Moderator", value=interaction.user.mention, inline=True)
-        embed.add_field(name="🎮 Places", value="{}/{} unbanned".format(len(results) - len(failed), len(results)), inline=True)
+
+        embed.add_field(
+            name="🛡 Moderator",
+            value=interaction.user.mention,
+            inline=True
+        )
+
+        embed.add_field(
+            name="🎮 Places",
+            value="{}/{} unbanned".format(
+                len(results) - len(failed),
+                len(results)
+            ),
+            inline=True
+        )
 
         if failed:
             embed.add_field(
                 name="⚠️ Failed",
-                value=trim_embed_value("\n".join(["Universe `{}`: {}".format(uid, err) for uid, err in failed])),
+                value=trim_embed_value(
+                    "\n".join([
+                        "Universe `{}`: {}".format(uid, err)
+                        for uid, err in failed
+                    ])
+                ),
                 inline=False
             )
 
@@ -468,7 +489,7 @@ async def on_ready():
 
         is_banned = outcome is None or outcome.value == "banned"
 
-        # Build tag list: always add Closed, add Banned or Reviewed based on outcome
+      
         existing_tag_ids = [t.id for t in channel.applied_tags]
         new_tag_ids = list(existing_tag_ids)
 
@@ -486,7 +507,7 @@ async def on_ready():
             if TAG_BANNED in new_tag_ids:
                 new_tag_ids.remove(TAG_BANNED)
 
-        # Fetch the parent forum's available tags to build ForumTag objects
+        
         parent = channel.parent
         available_tags = {t.id: t for t in getattr(parent, "available_tags", [])}
         tags_to_apply = [available_tags[tid] for tid in new_tag_ids if tid in available_tags]
