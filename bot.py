@@ -558,11 +558,8 @@ async def on_ready():
             )
             return
 
-        owner_mention = "User"
+        owner_mention = "<@{}>".format(channel.owner_id) if channel.owner_id else ""
 
-        if channel.owner_id:
-            owner = await bot.fetch_user(channel.owner_id)
-            owner_mention = owner.mention
 
         if is_banned:
             embed_title = (
@@ -600,7 +597,10 @@ async def on_ready():
 
         embed.set_footer(text="Report closed")
 
-        await channel.send(embed=embed)
+        await channel.send(
+            content=owner_mention + "\n\n",
+            embed=embed,
+        )
 
         await interaction.followup.send(
             "Report closed.",
