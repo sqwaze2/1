@@ -463,33 +463,54 @@ async def on_ready():
         guild=guild,
     )
     @app_commands.describe(
-        outcome="Whether the reported player was banned or not"
+        outcome="Whether the reported player was banned or not",
+        reason="Reason why the report was rejected (only for not banned)",
     )
     @app_commands.choices(
         outcome=[
-            app_commands.Choice(name="banned",     value="banned"),
+            app_commands.Choice(name="banned", value="banned"),
             app_commands.Choice(name="not banned", value="not_banned"),
-        ]
+        ],
+        reason=[
+            app_commands.Choice(
+                name="Provide proofs (screenshot or video) 🎥.",
+                value="Provide proofs (screenshot or video) 🎥.",
+            ),
+            app_commands.Choice(
+                name="Missing the exploiter username ⚠️.",
+                value="Missing the exploiter username ⚠️.",
+            ),
+            app_commands.Choice(
+                name="This isn't an exploiter ❗.",
+                value="This isn't an exploiter ❗.",
+            ),
+        ],
     )
     async def closerep_command(
         interaction: discord.Interaction,
         outcome: app_commands.Choice[str] = None,
+        reason: app_commands.Choice[str] = None,
     ):
         await interaction.response.defer(ephemeral=True)
 
         if not has_allowed_role(interaction.user):
-            await interaction.followup.send("You do not have permission to use this command.", ephemeral=True)
+            await interaction.followup.send(
+                "You do not have permission to use this command.",
+                ephemeral=True
+            )
             return
 
         channel = interaction.channel
 
         if not isinstance(channel, discord.Thread):
-            await interaction.followup.send("This command must be used inside a forum post (thread).", ephemeral=True)
+            await interaction.followup.send(
+                "This command must be used inside a forum post (thread).",
+                ephemeral=True
+            )
             return
 
         is_banned = outcome is None or outcome.value == "banned"
 
-      
         existing_tag_ids = [t.id for t in channel.applied_tags]
         new_tag_ids = list(existing_tag_ids)
 
@@ -499,48 +520,91 @@ async def on_ready():
         if is_banned:
             if TAG_BANNED and TAG_BANNED not in new_tag_ids:
                 new_tag_ids.append(TAG_BANNED)
+
             if TAG_REVIEWED in new_tag_ids:
                 new_tag_ids.remove(TAG_REVIEWED)
         else:
             if TAG_REVIEWED and TAG_REVIEWED not in new_tag_ids:
                 new_tag_ids.append(TAG_REVIEWED)
+
             if TAG_BANNED in new_tag_ids:
                 new_tag_ids.remove(TAG_BANNED)
 
-        
         parent = channel.parent
-        available_tags = {t.id: t for t in getattr(parent, "available_tags", [])}
-        tags_to_apply = [available_tags[tid] for tid in new_tag_ids if tid in available_tags]
+        available_tags = {
+            t.id: t for t in getattr(parent, "available_tags", [])
+        }
+
+        tags_to_apply = [
+            available_tags[tid]
+            for tid in new_tag_ids
+            if tid in available_tags
+        ]
 
         try:
             await channel.edit(applied_tags=tags_to_apply)
+
         except discord.Forbidden:
-            await interaction.followup.send("I don't have permission to edit this thread.", ephemeral=True)
-            return
-        except discord.HTTPException as e:
-            await interaction.followup.send("Failed to update the thread: {}".format(e), ephemeral=True)
+            await interaction.followup.send(
+                "I don't have permission to edit this thread.",
+                ephemeral=True
+            )
             return
 
-        # Ping the thread owner
-        owner_mention = "<@{}>".format(channel.owner_id) if channel.owner_id else ""
+        except discord.HTTPException as e:
+            await interaction.followup.send(
+                "Failed to update the thread: {}".format(e),
+                ephemeral=True
+            )
+            return
+
+        owner_mention = (
+            "<@{}>".format(channel.owner_id)
+            if channel.owner_id else "User"
+        )
 
         if is_banned:
-            embed_color = 0x99AAB5
-            embed_title = "Banned! Thanks for reporting."
+            embed_title = (
+                "Exploiter banned! {} thanks for reporting."
+                .format(owner_mention)
+            )
+
+            embed_color = 0x57F287  
+
         else:
-            embed_color = 0x57F287
-            embed_title = "Your report does not meet the Exploiter Report Rules. We cannot ban the exploiter ❗️"
+            embed_title = (
+                "{}, your report does not meet the Exploiter Report Rules."
+                .format(owner_mention)
+            )
+
+            embed_color = 0xFEE75C  
+
+        description = None
+
+        if not is_banned and reason:
+            description = "**What's wrong:** {}".format(reason.value)
 
         embed = discord.Embed(
             title=embed_title,
+            description=description,
             color=embed_color,
             timestamp=datetime.now(timezone.utc),
         )
-        embed.add_field(name="🛡 Closed by", value=interaction.user.mention, inline=True)
+
+        embed.add_field(
+            name="🛡 Closed by",
+            value=interaction.user.mention,
+            inline=True
+        )
+
         embed.set_footer(text="Report closed")
 
-        await channel.send(content=owner_mention, embed=embed)
-        await interaction.followup.send("Report closed.", ephemeral=True)
+        await channel.send(embed=embed)
+
+        await interaction.followup.send(
+            "Report closed.",
+            ephemeral=True
+        )
 
     # ── /syncbans ─────────────────────────────────────────────────────────────
 
