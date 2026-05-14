@@ -518,7 +518,7 @@ async def on_ready():
 
         if is_banned:
             embed_title = "Exploiter banned! {}, thanks for reporting.".format(owner_mention)
-        embed_color = 0x57F287
+            embed_color = 0x57F287
         else:
             embed_title = "{}, your report does not meet the Exploiter Report Rules.".format(owner_mention)
             embed_color = 0xFEE75C
