@@ -473,12 +473,12 @@ async def on_ready():
         ],
         reason=[
             app_commands.Choice(
-                name="Provide proofs (screenshot or video) 🎥.",
-                value="Provide proofs (screenshot or video) 🎥.",
+                name="Proofs hasn't been provided (screenshot or video) 🎥.",
+                value="Proofs hasn't been provided (screenshot or video) 🎥.",
             ),
             app_commands.Choice(
-                name="Missing the exploiter username ⚠️.",
-                value="Missing the exploiter username ⚠️.",
+                name="Missing the exploiter username (in the clip) ⚠️.",
+                value="Missing the exploiter username (in the clip) ⚠️.",
             ),
             app_commands.Choice(
                 name="This isn't an exploiter ❗.",
@@ -563,16 +563,14 @@ async def on_ready():
 
         if is_banned:
             embed_title = (
-                "Exploiter banned! {} thanks for reporting."
-                .format(owner_mention)
+                "Exploiter banned! Thanks for reporting."
             )
 
             embed_color = 0x57F287  
 
         else:
             embed_title = (
-                "{}, your report does not meet the Exploiter Report Rules."
-                .format(owner_mention)
+                "Your report does not meet the Exploiter Report Rules."
             )
 
             embed_color = 0xFEE75C  
@@ -598,7 +596,7 @@ async def on_ready():
         embed.set_footer(text="Report closed")
 
         await channel.send(
-            content=owner_mention + "\n\n",
+            content=owner_mention,
             embed=embed,
         )
 
