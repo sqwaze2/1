@@ -516,32 +516,32 @@ async def on_ready():
 
         owner_mention = "<@{}>".format(channel.owner_id) if channel.owner_id else ""
 
-            if is_banned:
-                embed_title = "Exploiter banned! {} thanks for reporting.".format(owner_mention)
-                embed_color = 0x57F287  
-            else:
-                embed_title = "{} your report does not meet the Exploiter Report Rules.".format(owner_mention)
-                embed_color = 0xFEE75C 
+        if is_banned:
+            embed_title = "Exploiter banned! {}, thanks for reporting.".format(owner_mention)
+        embed_color = 0x57F287
+        else:
+            embed_title = "{}, your report does not meet the Exploiter Report Rules.".format(owner_mention)
+            embed_color = 0xFEE75C
 
-            description = None
+        description = None
 
-            if not is_banned and reason:
-                description = "**What's wrong:** {}".format(reason.value)
+        if not is_banned and reason:
+            description = "**What's wrong:** {}".format(reason.value)
 
-            embed = discord.Embed(
-                title=embed_title,
-                description=description,
-                color=embed_color,
-                timestamp=datetime.now(timezone.utc),
-            )
+        embed = discord.Embed(
+            title=embed_title,
+            description=description,
+            color=embed_color,
+            timestamp=datetime.now(timezone.utc),
+        )
 
-            embed.add_field(
-                name="🛡 Closed by",
-                value=interaction.user.mention,
-                inline=True
-            )
+        embed.add_field(
+            name="🛡 Closed by",
+            value=interaction.user.mention,
+            inline=True
+        )
 
-            embed.set_footer(text="Report closed")
+        embed.set_footer(text="Report closed")
 
         await channel.send(embed=embed)
         await interaction.followup.send("Report closed.", ephemeral=True)
