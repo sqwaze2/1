@@ -313,41 +313,39 @@ async def on_ready():
         guild=guild,
     )
     @app_commands.describe(
-        method="How to find the player: user-id or user-name",
-        value="Player Roblox ID or username"
-    )
-    @app_commands.choices(
-        method=[
-            app_commands.Choice(name="user-id", value="user-id"),
-            app_commands.Choice(name="user-name", value="user-name"),
-        ]
+        username="Player Roblox username"
     )
     async def unban_command(
         interaction: discord.Interaction,
-        method: app_commands.Choice[str],
-        value: str
+        username: str
     ):
         await interaction.response.defer()
 
         if not has_allowed_role(interaction.user):
-            await interaction.followup.send("You do not have permission to use this command.", ephemeral=True)
+            await interaction.followup.send(
+                "You do not have permission to use this command.",
+                ephemeral=True
+            )
             return
 
         async with aiohttp.ClientSession() as session:
-            if method.value == "user-id":
-                if not value.isdigit():
-                    await interaction.followup.send("Invalid format: user-id must be a number.", ephemeral=True)
-                    return
-                user_id = int(value)
-            else:
-                user_id = await get_user_id_by_name(session, value)
-                if not user_id:
-                    await interaction.followup.send("User **{}** was not found on Roblox.".format(value), ephemeral=True)
-                    return
 
-            username, display_name, avatar_url, friends, followers, following = await fetch_user_data(session, user_id)
+            user_id = await get_user_id_by_name(session, username)
+
+            if not user_id:
+                await interaction.followup.send(
+                    "User **{}** was not found on Roblox.".format(username),
+                    ephemeral=True
+                )
+                return
+
+            username, display_name, avatar_url, friends, followers, following = await fetch_user_data(
+                session,
+                user_id
+            )
 
             results = []
+
             for uid in UNIVERSE_IDS:
                 ok, err = await unban_in_universe(session, user_id, uid)
                 results.append((uid, ok, err))
@@ -355,17 +353,40 @@ async def on_ready():
         failed = [(uid, err) for uid, ok, err in results if not ok]
 
         embed = build_user_embed(
-            user_id, display_name, username, avatar_url,
-            friends, followers, following,
+            user_id,
+            display_name,
+            username,
+            avatar_url,
+            friends,
+            followers,
+            following,
             0x57F287 if not failed else 0xE74C3C
         )
-        embed.add_field(name="🛡 Moderator", value=interaction.user.mention, inline=True)
-        embed.add_field(name="🎮 Places", value="{}/{} unbanned".format(len(results) - len(failed), len(results)), inline=True)
+
+        embed.add_field(
+            name="🛡 Moderator",
+            value=interaction.user.mention,
+            inline=True
+        )
+
+        embed.add_field(
+            name="🎮 Places",
+            value="{}/{} unbanned".format(
+                len(results) - len(failed),
+                len(results)
+            ),
+            inline=True
+        )
 
         if failed:
             embed.add_field(
                 name="⚠️ Failed",
-                value=trim_embed_value("\n".join(["Universe `{}`: {}".format(uid, err) for uid, err in failed])),
+                value=trim_embed_value(
+                    "\n".join([
+                        "Universe `{}`: {}".format(uid, err)
+                        for uid, err in failed
+                    ])
+                ),
                 inline=False
             )
 
@@ -442,33 +463,17 @@ async def on_ready():
         guild=guild,
     )
     @app_commands.describe(
-        outcome="Whether the reported player was banned or not",
-        reason="Reason why the report was rejected (only for not banned)",
+        outcome="Whether the reported player was banned or not"
     )
     @app_commands.choices(
         outcome=[
             app_commands.Choice(name="banned",     value="banned"),
             app_commands.Choice(name="not banned", value="not_banned"),
-        ],
-        reason=[
-            app_commands.Choice(
-                name="Provide proofs (screenshot or video)🎥.",
-                value="Provide proofs (screenshot or video)🎥.",
-            ),
-            app_commands.Choice(
-                name="Missing the exploiter username ⚠️.",
-                value="Missing the exploiter username ⚠️.",
-            ),
-            app_commands.Choiсe(
-                name="This isn't an exploiter❗.",
-                value="This isn't an exploiter❗.",
-            ),   
-        ],
+        ]
     )
     async def closerep_command(
         interaction: discord.Interaction,
         outcome: app_commands.Choice[str] = None,
-        reason: app_commands.Choice[str] = None,
     ):
         await interaction.response.defer(ephemeral=True)
 
@@ -484,6 +489,7 @@ async def on_ready():
 
         is_banned = outcome is None or outcome.value == "banned"
 
+      
         existing_tag_ids = [t.id for t in channel.applied_tags]
         new_tag_ids = list(existing_tag_ids)
 
@@ -501,6 +507,7 @@ async def on_ready():
             if TAG_BANNED in new_tag_ids:
                 new_tag_ids.remove(TAG_BANNED)
 
+        
         parent = channel.parent
         available_tags = {t.id: t for t in getattr(parent, "available_tags", [])}
         tags_to_apply = [available_tags[tid] for tid in new_tag_ids if tid in available_tags]
@@ -514,37 +521,27 @@ async def on_ready():
             await interaction.followup.send("Failed to update the thread: {}".format(e), ephemeral=True)
             return
 
+        # Ping the thread owner
         owner_mention = "<@{}>".format(channel.owner_id) if channel.owner_id else ""
 
         if is_banned:
-            embed_title = "Exploiter banned! {}, thanks for reporting.".format(owner_mention)
-            embed_color = 0x57F287
+            embed_color = 0x99AAB5
+            embed_title = "Banned! Thanks for reporting."
         else:
-            embed_title = "{}, your report does not meet the Exploiter Report Rules.".format(owner_mention)
-            embed_color = 0xFEE75C
-
-        description = None
-
-        if not is_banned and reason:
-            description = "**What's wrong:** {}".format(reason.value)
+            embed_color = 0x57F287
+            embed_title = "Your report does not meet the Exploiter Report Rules. We cannot ban the exploiter ❗️"
 
         embed = discord.Embed(
             title=embed_title,
-            description=description,
             color=embed_color,
             timestamp=datetime.now(timezone.utc),
         )
-
-        embed.add_field(
-            name="🛡 Closed by",
-            value=interaction.user.mention,
-            inline=True
-        )
-
+        embed.add_field(name="🛡 Closed by", value=interaction.user.mention, inline=True)
         embed.set_footer(text="Report closed")
 
-        await channel.send(embed=embed)
+        await channel.send(content=owner_mention, embed=embed)
         await interaction.followup.send("Report closed.", ephemeral=True)
+
     # ── /syncbans ─────────────────────────────────────────────────────────────
 
     @bot.tree.command(
