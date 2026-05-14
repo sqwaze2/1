@@ -558,10 +558,11 @@ async def on_ready():
             )
             return
 
-        owner_mention = (
-            "<@{}>".format(channel.owner_id)
-            if channel.owner_id else "User"
-        )
+        owner_mention = "User"
+
+        if channel.owner_id:
+            owner = await bot.fetch_user(channel.owner_id)
+            owner_mention = owner.mention
 
         if is_banned:
             embed_title = (
