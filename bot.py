@@ -25,19 +25,6 @@ ALLOWED_ROLES = [
     "Community Helper",
 ]
 
-# ── Загрузка групп: ROBLOX_API_KEY_1 → [UNIVERSE_ID_1_1, UNIVERSE_ID_1_2, ...]
-# Формат .env:
-#   ROBLOX_API_KEY_1=ключ1
-#   UNIVERSE_ID_1_1=111
-#   UNIVERSE_ID_1_2=222
-#   ROBLOX_API_KEY_2=ключ2
-#   UNIVERSE_ID_2_1=333
-#
-# API_GROUPS = [
-#   {"api_key": "ключ1", "universe_ids": ["111", "222"]},
-#   {"api_key": "ключ2", "universe_ids": ["333"]},
-# ]
-
 API_GROUPS = []
 
 key_index = 1
@@ -62,7 +49,7 @@ while True:
 
     key_index += 1
 
-# Обратная совместимость: если нет групп — пробуем старый формат ROBLOX_API_KEY + UNIVERSE_ID_N
+
 if not API_GROUPS:
     legacy_key = os.getenv("ROBLOX_API_KEY")
     if legacy_key:
@@ -81,10 +68,9 @@ if not API_GROUPS:
 if not API_GROUPS:
     raise ValueError("No API groups found. Define ROBLOX_API_KEY_1 + UNIVERSE_ID_1_1 in .env")
 
-# Плоский список всех universe_ids для удобства
 ALL_UNIVERSE_IDS = [uid for group in API_GROUPS for uid in group["universe_ids"]]
 
-# Словарь universe_id → api_key
+
 UNIVERSE_API_KEY = {}
 for group in API_GROUPS:
     for uid in group["universe_ids"]:
@@ -445,22 +431,22 @@ async def ban_command(
             )
         await interaction.followup.send(embed=embed)
 
-        # Переименовываем тред если команда написана внутри него
+        
         if isinstance(interaction.channel, discord.Thread):
             thread = interaction.channel
             current_name = thread.name
             if current_name.startswith("Exp:"):
-                # Добавляем ник к существующим
+                
                 new_name = "{}, {}".format(current_name, username)
             else:
                 new_name = "Exp: {}".format(username)
-            # Discord ограничивает название треда до 100 символов
+            
             if len(new_name) > 100:
                 new_name = new_name[:97] + "..."
             try:
                 await thread.edit(name=new_name)
             except (discord.Forbidden, discord.HTTPException):
-                pass  # Нет прав или ошибка — молча пропускаем
+                pass  
 
 
 # ── /closerep ─────────────────────────────────────────────────────────────
