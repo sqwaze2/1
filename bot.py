@@ -310,9 +310,8 @@ def build_user_embed(user_id, display_name, username, avatar_url, friends, follo
 async def on_ready():
     print("Bot ready: {}".format(bot.user))
     guild_obj = discord.Object(id=GUILD_ID)
-    bot.tree.clear_commands(guild=guild_obj)
-    bot.tree.clear_commands(guild=None)
-    await bot.tree.sync(guild=guild_obj)
+    synced = await bot.tree.sync(guild=guild_obj)
+    print("Synced {} command(s) to guild {}.".format(len(synced), GUILD_ID))
 
 
 # ── /unban ────────────────────────────────────────────────────────────────
@@ -683,7 +682,7 @@ async def syncbans_command(interaction: discord.Interaction):
 
         await interaction.followup.send(embed=embed)
 
-    await bot.tree.sync(guild=guild)
+
     print("Commands synced to guild {}.".format(GUILD_ID))
 
 
