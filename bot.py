@@ -309,13 +309,10 @@ def build_user_embed(user_id, display_name, username, avatar_url, friends, follo
 @bot.event
 async def on_ready():
     print("Bot ready: {}".format(bot.user))
-    print("Loaded {} API group(s), {} universe(s) total.".format(len(API_GROUPS), len(ALL_UNIVERSE_IDS)))
-    for i, group in enumerate(API_GROUPS, 1):
-        print("  Group {}: {} universe(s) → {}".format(i, len(group["universe_ids"]), group["universe_ids"]))
-    guild = discord.Object(id=GUILD_ID)
-    bot.tree.clear_commands(guild=guild)
+    guild_obj = discord.Object(id=GUILD_ID)
+    bot.tree.clear_commands(guild=guild_obj)
     bot.tree.clear_commands(guild=None)
-    await bot.tree.sync(guild=None)
+    await bot.tree.sync(guild=guild_obj)
 
 
 # ── /unban ────────────────────────────────────────────────────────────────
