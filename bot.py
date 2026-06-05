@@ -70,7 +70,6 @@ if not API_GROUPS:
 
 ALL_UNIVERSE_IDS = [uid for group in API_GROUPS for uid in group["universe_ids"]]
 
-
 UNIVERSE_API_KEY = {}
 for group in API_GROUPS:
     for uid in group["universe_ids"]:
@@ -215,6 +214,18 @@ async def list_user_restrictions(session, universe_id, api_key):
     return restrictions, None
 
 
+async def get_user_restriction(session, user_id, universe_id):
+    api_key = UNIVERSE_API_KEY[universe_id]
+    url = "https://apis.roblox.com/cloud/v2/universes/{}/user-restrictions/{}".format(
+        universe_id, user_id
+    )
+    headers = {"x-api-key": api_key}
+    async with session.get(url, headers=headers) as resp:
+        if resp.status == 200:
+            return await resp.json()
+        return None
+
+
 async def ban_in_universe(session, user_id, reason, duration_seconds, universe_id):
     api_key = UNIVERSE_API_KEY[universe_id]
     url = "https://apis.roblox.com/cloud/v2/universes/{}/user-restrictions/{}".format(
@@ -309,6 +320,9 @@ def build_user_embed(user_id, display_name, username, avatar_url, friends, follo
 @bot.event
 async def on_ready():
     print("Bot ready: {}".format(bot.user))
+    print("Loaded {} API group(s), {} universe(s) total.".format(len(API_GROUPS), len(ALL_UNIVERSE_IDS)))
+    for i, group in enumerate(API_GROUPS, 1):
+        print("  Group {}: {} universe(s) → {}".format(i, len(group["universe_ids"]), group["universe_ids"]))
     guild_obj = discord.Object(id=GUILD_ID)
     synced = await bot.tree.sync(guild=guild_obj)
     print("Synced {} command(s) to guild {}.".format(len(synced), GUILD_ID))
@@ -432,17 +446,104 @@ async def ban_command(
             thread = interaction.channel
             current_name = thread.name
             if current_name.startswith("Exp:"):
-                
                 new_name = "{}, {}".format(current_name, username)
             else:
                 new_name = "Exp: {}".format(username)
-            
             if len(new_name) > 100:
                 new_name = new_name[:97] + "..."
             try:
                 await thread.edit(name=new_name)
             except (discord.Forbidden, discord.HTTPException):
-                pass  
+                pass
+
+
+# ── /infoban ──────────────────────────────────────────────────────────────
+
+@bot.tree.command(
+    name="infoban",
+    description="Check ban status of a Roblox player across all universes",
+    guild=guild,
+)
+@app_commands.describe(username="Player Roblox username")
+async def infoban_command(interaction: discord.Interaction, username: str):
+    await interaction.response.defer()
+    if not has_allowed_role(interaction.user):
+        await interaction.followup.send("You do not have permission to use this command.", ephemeral=True)
+        return
+
+    async with aiohttp.ClientSession() as session:
+        user_id = await get_user_id_by_name(session, username)
+        if not user_id:
+            await interaction.followup.send("User **{}** was not found on Roblox.".format(username), ephemeral=True)
+            return
+
+        username, display_name, avatar_url, friends, followers, following = await fetch_user_data(session, user_id)
+
+        
+        restriction_tasks = [get_user_restriction(session, user_id, uid) for uid in ALL_UNIVERSE_IDS]
+        universe_info_tasks = [get_universe_info(session, uid) for uid in ALL_UNIVERSE_IDS]
+
+        restriction_results, universe_info_results = await asyncio.gather(
+            asyncio.gather(*restriction_tasks),
+            asyncio.gather(*universe_info_tasks),
+        )
+
+        banned_lines = []
+
+        for universe_id, data, info in zip(ALL_UNIVERSE_IDS, restriction_results, universe_info_results):
+            game_join = (data or {}).get("gameJoinRestriction", {})
+            if not game_join.get("active", False):
+                continue
+
+            place_name = info.get("name", "Universe {}".format(universe_id))
+            place_url = info.get("url", "https://www.roblox.com/discover#/")
+
+            start_time = game_join.get("startTime", "")
+            duration = game_join.get("duration")
+            display_reason = game_join.get("displayReason", "")
+
+            if start_time:
+                try:
+                    dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                    date_str = "<t:{}:f>".format(int(dt.timestamp()))
+                except Exception:
+                    date_str = start_time
+            else:
+                date_str = "Unknown"
+
+            duration_str = "Permanent" if not duration else duration
+            reason_str = " • `{}`".format(display_reason) if display_reason else ""
+
+            banned_lines.append(
+                "**[{}]({})** — {} | {}{}".format(place_name, place_url, date_str, duration_str, reason_str)
+            )
+
+        total_banned = len(banned_lines)
+
+        if total_banned == 0:
+            embed = build_user_embed(
+                user_id, display_name, username, avatar_url,
+                friends, followers, following,
+                0x57F287,
+            )
+            embed.add_field(
+                name="✅ Not banned",
+                value="This player is not banned in any of the {} configured universe(s).".format(len(ALL_UNIVERSE_IDS)),
+                inline=False,
+            )
+        else:
+            embed = build_user_embed(
+                user_id, display_name, username, avatar_url,
+                friends, followers, following,
+                0xE74C3C,
+            )
+            embed.add_field(
+                name="🔨 Banned in {}/{} universe(s)".format(total_banned, len(ALL_UNIVERSE_IDS)),
+                value=trim_embed_value("\n".join(banned_lines)),
+                inline=False,
+            )
+
+        await interaction.followup.send(embed=embed)
 
 
 # ── /closerep ─────────────────────────────────────────────────────────────
@@ -563,7 +664,7 @@ async def syncbans_command(interaction: discord.Interaction):
         return
 
     if not ALL_UNIVERSE_IDS:
-        await interaction.followup.send("I couldn't find any universe IDs in your config yet.", ephemeral=True)
+        await interaction.followup.send("no universe IDs found.", ephemeral=True)
         return
 
     async with aiohttp.ClientSession() as session:
@@ -595,7 +696,7 @@ async def syncbans_command(interaction: discord.Interaction):
             universe_bans[universe_id] = current_bans
 
         if not all_bans and not source_errors:
-            await interaction.followup.send("Right now there are no active bans to sync.", ephemeral=True)
+            await interaction.followup.send("rn there are no active bans to sync.", ephemeral=True)
             return
 
         results = []
@@ -627,7 +728,7 @@ async def syncbans_command(interaction: discord.Interaction):
         ]
 
         if not migrated and not failed:
-            await interaction.followup.send("Everything is already synced. Nothing new to add.", ephemeral=True)
+            await interaction.followup.send("everything is already synced. nothing new to add.", ephemeral=True)
             return
 
         updates_by_universe = {}
@@ -681,7 +782,6 @@ async def syncbans_command(interaction: discord.Interaction):
             )
 
         await interaction.followup.send(embed=embed)
-
 
     print("Commands synced to guild {}.".format(GUILD_ID))
 
