@@ -512,7 +512,7 @@ async def infoban_command(interaction: discord.Interaction, username: str):
                 date_str = "Unknown"
 
             duration_str = "Permanent" if not duration else duration
-            reason_str = " • `{}`".format(display_reason) if display_reason else ""
+            reason_str = " • Reason: {}".format(display_reason) if display_reason else ""
 
             banned_lines.append(
                 "**[{}]({})** — {} | {}{}".format(place_name, place_url, date_str, duration_str, reason_str)
