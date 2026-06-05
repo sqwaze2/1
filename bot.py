@@ -528,7 +528,7 @@ async def infoban_command(interaction: discord.Interaction, username: str):
             )
             embed.add_field(
                 name="✅ Not banned",
-                value="This player is not banned in any of the {} configured universe(s).".format(len(ALL_UNIVERSE_IDS)),
+                value="This player is not banned in any of the {} configured place(s).".format(len(ALL_UNIVERSE_IDS)),
                 inline=False,
             )
         else:
@@ -538,7 +538,7 @@ async def infoban_command(interaction: discord.Interaction, username: str):
                 0xE74C3C,
             )
             embed.add_field(
-                name="🔨 Banned in {}/{} universe(s)".format(total_banned, len(ALL_UNIVERSE_IDS)),
+                name="🔨 Banned in {}/{} place(s)".format(total_banned, len(ALL_UNIVERSE_IDS)),
                 value=trim_embed_value("\n".join(banned_lines)),
                 inline=False,
             )
